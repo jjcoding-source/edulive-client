@@ -1,63 +1,81 @@
 'use client'
-import { useAppSelector } from '@/store/hooks'
-import Topbar from '@/components/layout/Topbar'
+import { useEffect }        from 'react'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { fetchDashboard }   from '@/store/slices/dashboardSlice'
+import Topbar               from '@/components/layout/Topbar'
+import Link                 from 'next/link'
 import {
   Clock, BookOpen, Target, MessageCircle,
-  TrendingUp, TrendingDown, ArrowRight, Zap,
+  TrendingUp, TrendingDown, ArrowRight, Zap, Loader2,
 } from 'lucide-react'
-import Link from 'next/link'
 
-const kpis = [
-  { label: 'Hours Studied',    value: '47',  change: '+12% this week', up: true,  icon: Clock      },
-  { label: 'Classes Attended', value: '23',  change: '+3 vs last week',up: true,  icon: BookOpen   },
-  { label: 'Quiz Avg Score',   value: '78%', change: '−4% this week',  up: false, icon: Target     },
-  { label: 'Doubts Solved',    value: '31',  change: '+7 this month',  up: true,  icon: MessageCircle },
-]
-
-const subjects = [
-  { name: 'Mathematics', score: 82, color: 'bg-edu-blue'   },
-  { name: 'Physics',     score: 68, color: 'bg-edu-green'  },
-  { name: 'Chemistry',   score: 54, color: 'bg-edu-amber'  },
-  { name: 'Biology',     score: 91, color: 'bg-edu-pink'   },
-  { name: 'English',     score: 76, color: 'bg-edu-purple' },
-]
-
-const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const weekHours = [4, 6, 3, 7, 5, 6.5, 2]
-
-const sessions = [
-  { title: 'Calculus — Integration Methods', tutor: 'Dr. Priya Sharma', time: 'LIVE NOW',   live: true,  color: 'bg-edu-blue/10'   },
-  { title: 'Thermodynamics Revision',         tutor: 'Prof. Kiran Mehta', time: 'Today 6 PM', live: false, color: 'bg-edu-green/10'  },
-  { title: 'Organic Chemistry Quiz',          tutor: 'Ms. Ananya Iyer',   time: 'Tomorrow 10 AM', live: false, color: 'bg-edu-amber/10' },
-  { title: 'Essay Writing Workshop',          tutor: 'Mr. Rahul Nair',    time: 'Thu 3 PM',   live: false, color: 'bg-edu-pink/10'   },
-]
-
-const weakAreas = [
-  { topic: 'Chemical Bonding',         score: 42 },
-  { topic: 'Electromagnetic Induction',score: 51 },
-  { topic: 'Differential Equations',   score: 55 },
-]
+const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function DashboardPage() {
+  const dispatch = useAppDispatch()
   const { user } = useAppSelector(s => s.auth)
+  const { stats, upcomingSessions, isLoading, error } = useAppSelector(s => s.dashboard)
+
+  useEffect(() => { dispatch(fetchDashboard()) }, [dispatch])
+
   const greeting = () => {
     const h = new Date().getHours()
     return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
   }
+
+  if (isLoading) {
+    return (
+      <div>
+        <Topbar title="Dashboard" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex items-center gap-3 text-white/40">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Loading your dashboard...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div>
+        <Topbar title="Dashboard" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p className="text-edu-red text-sm mb-3">{error}</p>
+            <button onClick={() => dispatch(fetchDashboard())} className="edu-btn-ghost text-sm">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const kpis = [
+    { label: 'Hours Studied',    value: stats?.hoursStudied    ?? 0,    change: 'this week',   up: true,  icon: Clock        },
+    { label: 'Classes Attended', value: stats?.classesAttended ?? 0,    change: 'total',        up: true,  icon: BookOpen     },
+    { label: 'Quiz Avg Score',   value: `${stats?.quizAvgScore ?? 0}%`, change: 'avg score',    up: (stats?.quizAvgScore ?? 0) >= 60, icon: Target },
+    { label: 'Doubts Solved',    value: stats?.doubtsSolved    ?? 0,    change: 'total',        up: true,  icon: MessageCircle},
+  ]
+
+  const weeklyHours: number[] = stats?.weeklyHours ?? [0,0,0,0,0,0,0]
+  const maxHours = Math.max(...weeklyHours, 1)
+  const todayIdx = new Date().getDay()
 
   return (
     <div>
       <Topbar title="Dashboard" subtitle="Overview of your learning activity" />
       <div className="p-8">
 
-        {/* Greeting */}
         <div className="flex items-center justify-between mb-7">
           <h2 className="font-display text-xl font-bold">
             {greeting()}, {user?.name?.split(' ')[0] ?? 'Student'} 👋
           </h2>
         </div>
 
-        {/* KPI Cards */}
+        {/* KPIs */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           {kpis.map(({ label, value, change, up, icon: Icon }) => (
             <div key={label} className="edu-card p-5">
@@ -76,38 +94,47 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Mid row: Subject progress + Weekly chart */}
+        {/* Mid row */}
         <div className="grid grid-cols-2 gap-5 mb-5">
           {/* Subject Progress */}
           <div className="edu-card p-6">
             <h3 className="font-display font-semibold text-sm mb-5">Subject Performance</h3>
-            <div className="flex flex-col gap-3.5">
-              {subjects.map(s => (
-                <div key={s.name} className="flex items-center gap-3">
-                  <span className="text-xs text-white/55 w-[88px] flex-shrink-0">{s.name}</span>
-                  <div className="flex-1 h-1.5 bg-white/[0.07] rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${s.color}`} style={{ width: `${s.score}%` }} />
-                  </div>
-                  <span className="text-[11px] text-white/35 w-8 text-right">{s.score}%</span>
-                </div>
-              ))}
-            </div>
+            {(stats?.subjectProgress ?? []).length === 0 ? (
+              <p className="text-sm text-white/25 text-center py-6">
+                Complete quizzes to see your subject performance.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3.5">
+                {(stats?.subjectProgress ?? []).map((s: any, i: number) => {
+                  const colors = ['bg-edu-blue','bg-edu-green','bg-edu-amber','bg-edu-pink','bg-edu-purple']
+                  return (
+                    <div key={s.subject} className="flex items-center gap-3">
+                      <span className="text-xs text-white/55 w-[88px] flex-shrink-0">{s.subject}</span>
+                      <div className="flex-1 h-1.5 bg-white/[0.07] rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${colors[i % colors.length]}`}
+                          style={{ width: `${s.score}%` }} />
+                      </div>
+                      <span className="text-[11px] text-white/35 w-8 text-right">{s.score}%</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Weekly chart */}
+          {/* Weekly Hours */}
           <div className="edu-card p-6">
             <h3 className="font-display font-semibold text-sm mb-5">Weekly Study Hours</h3>
             <div className="flex items-end justify-between h-28 gap-2">
               {weekdays.map((day, i) => {
-                const max = Math.max(...weekHours)
-                const pct = (weekHours[i] / max) * 100
-                const isToday = i === 3
+                const pct     = (weeklyHours[i] / maxHours) * 100
+                const isToday = i === todayIdx
                 return (
                   <div key={day} className="flex flex-col items-center gap-1.5 flex-1">
                     <div className="w-full flex items-end justify-center" style={{ height: '90px' }}>
                       <div
                         className={`w-full rounded-t-md transition-all ${isToday ? 'bg-edu-blue' : 'bg-edu-blue/25'}`}
-                        style={{ height: `${pct}%` }}
+                        style={{ height: `${Math.max(pct, 4)}%` }}
                       />
                     </div>
                     <span className={`text-[10px] ${isToday ? 'text-edu-blue' : 'text-white/25'}`}>{day}</span>
@@ -118,58 +145,80 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bottom row: Sessions + Weak areas */}
+        {/* Bottom row */}
         <div className="grid grid-cols-[1.3fr_1fr] gap-5">
-          {/* Upcoming sessions */}
+          {/* Upcoming Sessions from API */}
           <div className="edu-card p-6">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-display font-semibold text-sm">Upcoming Sessions</h3>
-              <Link href="/schedule" className="text-xs text-edu-blue/70 hover:text-edu-blue flex items-center gap-1 transition-colors">
+              <Link href="/live" className="text-xs text-edu-blue/70 hover:text-edu-blue flex items-center gap-1 transition-colors">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
-            <div className="flex flex-col divide-y divide-white/[0.05]">
-              {sessions.map(s => (
-                <div key={s.title} className="flex items-center gap-3 py-3">
-                  <div className={`w-9 h-9 ${s.color} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                    <BookOpen className="w-4 h-4 text-white/60" />
+            {upcomingSessions.length === 0 ? (
+              <div className="text-center py-8">
+                <BookOpen className="w-8 h-8 text-white/10 mx-auto mb-2" />
+                <p className="text-sm text-white/25">No upcoming sessions.</p>
+                <Link href="/tutors" className="text-xs text-edu-blue mt-2 inline-block hover:underline">
+                  Browse tutors →
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y divide-white/[0.05]">
+                {upcomingSessions.slice(0, 4).map((s: any) => (
+                  <div key={s._id} className="flex items-center gap-3 py-3">
+                    <div className="w-9 h-9 bg-edu-blue/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <BookOpen className="w-4 h-4 text-edu-blue/60" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white/80 font-medium truncate">{s.title}</p>
+                      <p className="text-xs text-white/35 mt-0.5">
+                        {typeof s.tutor === 'object' ? s.tutor.name : 'Tutor'}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {s.status === 'live'
+                        ? <span className="flex items-center gap-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2.5 py-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 live-pulse" /> LIVE
+                          </span>
+                        : <span className="text-xs text-white/30">
+                            {new Date(s.startTime).toLocaleString('en-IN', {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                            })}
+                          </span>
+                      }
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white/80 font-medium truncate">{s.title}</p>
-                    <p className="text-xs text-white/35 mt-0.5">{s.tutor}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {s.live
-                      ? <span className="flex items-center gap-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2.5 py-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 live-pulse" /> LIVE
-                        </span>
-                      : <span className="text-xs text-white/30">{s.time}</span>
-                    }
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Weak areas */}
+          {/* Weak Areas from API */}
           <div className="edu-card p-6">
             <h3 className="font-display font-semibold text-sm mb-5">Weak Areas</h3>
-            <div className="flex flex-col gap-2.5 mb-4">
-              {weakAreas.map(w => (
-                <div key={w.topic}
-                  className="flex items-center justify-between px-4 py-2.5 bg-red-500/[0.06] border border-red-500/15 rounded-xl">
-                  <span className="text-sm text-white/65">{w.topic}</span>
-                  <span className="text-sm text-edu-red font-medium">{w.score}%</span>
-                </div>
-              ))}
-            </div>
-            <div className="bg-edu-blue/[0.07] border border-edu-blue/15 rounded-xl p-4">
+            {(stats?.weakAreas ?? []).length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-white/25">No weak areas detected yet.</p>
+                <p className="text-xs text-white/15 mt-1">Complete quizzes to get insights.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2.5 mb-4">
+                {(stats?.weakAreas ?? []).map((w: any) => (
+                  <div key={w.topic}
+                    className="flex items-center justify-between px-4 py-2.5 bg-red-500/[0.06] border border-red-500/15 rounded-xl">
+                    <span className="text-sm text-white/65">{w.topic}</span>
+                    <span className="text-sm text-edu-red font-medium">{w.score}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="bg-edu-blue/[0.07] border border-edu-blue/15 rounded-xl p-4 mt-3">
               <div className="flex items-center gap-2 text-edu-blue text-xs font-medium mb-1.5">
-                <Zap className="w-3.5 h-3.5" /> AI Recommendation
+                <Zap className="w-3.5 h-3.5" /> Tip
               </div>
               <p className="text-xs text-white/40 leading-relaxed">
-                Schedule 2 extra sessions on Chemical Bonding this week. Your quiz scores suggest
-                gaps in Lewis structures and molecular geometry.
+                Focus on your weakest subjects first. Book a session with a tutor to get targeted help.
               </p>
             </div>
           </div>
