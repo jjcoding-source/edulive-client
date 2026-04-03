@@ -1,14 +1,14 @@
 'use client'
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useEffect }       from 'react'
+import Link                from 'next/link'
+import { useRouter }       from 'next/navigation'
+import { useForm }         from 'react-hook-form'
+import { zodResolver }     from '@hookform/resolvers/zod'
+import { z }               from 'zod'
 import { Eye, EyeOff, Play, Zap, BarChart3, Loader2 } from 'lucide-react'
-import { useAppDispatch } from '@/store/hooks'
-import { setCredentials, setLoading } from '@/store/slices/authSlice'
-import api from '@/lib/api'
+import { useState }        from 'react'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { loginThunk, clearError }         from '@/store/slices/authSlice'
 
 const schema = z.object({
   email:    z.string().email('Invalid email'),
@@ -17,30 +17,33 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 const features = [
-  { icon: Play,      bg: 'bg-edu-blue/10',   color: 'text-edu-blue',   text: 'HD live classrooms with interactive whiteboards' },
-  { icon: Zap,       bg: 'bg-edu-green/10',  color: 'text-edu-green',  text: 'Real-time doubt solving via WebSockets' },
-  { icon: BarChart3, bg: 'bg-edu-amber/10',  color: 'text-edu-amber',  text: 'AI-powered progress tracking & weak area detection' },
+  { icon: Play,      bg: 'bg-edu-blue/10',  color: 'text-edu-blue',  text: 'HD live classrooms with interactive whiteboards' },
+  { icon: Zap,       bg: 'bg-edu-green/10', color: 'text-edu-green', text: 'Real-time doubt solving via WebSockets' },
+  { icon: BarChart3, bg: 'bg-edu-amber/10', color: 'text-edu-amber', text: 'AI-powered progress tracking & weak area detection' },
 ]
 
 export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const dispatch = useAppDispatch()
   const router   = useRouter()
+  const { isLoading, error, isAuthenticated } = useAppSelector(s => s.auth)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, setError } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated) router.push('/dashboard')
+  }, [isAuthenticated, router])
+
+  
+  useEffect(() => () => { dispatch(clearError()) }, [dispatch])
+
   const onSubmit = async (data: FormData) => {
-    try {
-      dispatch(setLoading(true))
-      const res = await api.post('/auth/login', data)
-      dispatch(setCredentials({ user: res.data.user, token: res.data.token }))
+    const result = await dispatch(loginThunk(data))
+    if (loginThunk.fulfilled.match(result)) {
       router.push('/dashboard')
-    } catch (err: any) {
-      setError('root', { message: err.response?.data?.message || 'Login failed' })
-    } finally {
-      dispatch(setLoading(false))
     }
   }
 
@@ -81,16 +84,17 @@ export default function LoginPage() {
           <h1 className="font-display text-2xl font-bold mb-1">Sign in to EduLive</h1>
           <p className="text-sm text-white/35 mb-8">Enter your credentials to continue</p>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-            {errors.root && (
-              <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3 text-sm text-red-400">
-                {errors.root.message}
-              </div>
-            )}
+          {/* API error */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3 text-sm text-red-400 mb-4">
+              {error}
+            </div>
+          )}
 
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
             <div>
               <label className="block text-xs text-white/40 mb-1.5">Email address</label>
-              <input {...register('email')} className="edu-input" placeholder="arjun@gmail.com" />
+              <input {...register('email')} className="edu-input" placeholder="arjun@gmail.com" autoComplete="email" />
               {errors.email && <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>}
             </div>
 
@@ -107,6 +111,7 @@ export default function LoginPage() {
                   type={showPass ? 'text' : 'password'}
                   className="edu-input pr-10"
                   placeholder="Your password"
+                  autoComplete="current-password"
                 />
                 <button type="button" onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
@@ -116,8 +121,11 @@ export default function LoginPage() {
               {errors.password && <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>}
             </div>
 
-            <button type="submit" disabled={isSubmitting} className="edu-btn-primary mt-1 flex items-center justify-center gap-2">
-              {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In →'}
+            <button type="submit" disabled={isLoading}
+              className="edu-btn-primary mt-1 flex items-center justify-center gap-2">
+              {isLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
+                : 'Sign In →'}
             </button>
           </form>
 
@@ -127,7 +135,7 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-white/[0.07]" />
           </div>
 
-          <button className="w-full flex items-center justify-center gap-2 edu-btn-ghost text-sm">
+          <button className="w-full flex items-center justify-center gap-2 edu-btn-ghost text-sm" disabled>
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
