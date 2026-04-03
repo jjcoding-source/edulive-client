@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 const api = axios.create({
   baseURL:         process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api',
@@ -16,13 +16,13 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  (err: AxiosError<{ message: string }>) => {
     if (err.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('edu_token')
       window.location.href = '/login'
     }
     return Promise.reject(err)
-  }
+  },
 )
 
 export default api
